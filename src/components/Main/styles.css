@@ -1,0 +1,27 @@
+.main .list-task {
+    margin: 25px 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.main .list-task .task-item {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #ebebeb;
+}
+
+.main .list-task .task-item:last-child {
+    border: none;
+}
+
+.main .update .field-item {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 5px;
+}
