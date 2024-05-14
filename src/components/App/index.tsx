@@ -5,6 +5,7 @@ import TodoFooter from "../Footer";
 import TodoHeader from "../Header";
 import TodoMain from "../Main";
 import "./styles.css";
+import { centrifuge, sub } from "../../auth/centrifuge/centrifuge";
 
 
 const TodoApp: React.FC = () => {
@@ -25,7 +26,7 @@ const TodoApp: React.FC = () => {
     // Init tasks: If exists data local storage => set data || []
   });
 
-  const [filter, setFilter] = useState<"all" | "completed" | "pending">("all");  
+  const [filter, setFilter] = useState<"all" | "completed" | "pending">("all");
 
   const filteredTasks = tasks.filter((task) => {
     if (filter === "completed") {
@@ -35,6 +36,10 @@ const TodoApp: React.FC = () => {
     }
     return true;
   });
+  
+  useEffect(() => {
+    centrifuge.connect();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(tasks));
