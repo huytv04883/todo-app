@@ -1,10 +1,10 @@
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
-import { ErrorMsg, ITodoItemProps, TaskItem } from "../../types/app.type";
-import './styles.css';
 import DatePicker from "react-datepicker";
+import { centrifuge, sub } from "../../auth/centrifuge/centrifuge";
+import { ErrorMsg, ITodoItemProps, TaskItem } from "../../types/app.type";
 import { validateForm } from "../../utils/validate";
-import { calculateTimeRemaining } from "../../utils/remainingTime";
+import './styles.css';
 
 const TodoMain: React.FC<ITodoItemProps> = ({ data, tasks, setTasks }) => {
 
@@ -18,28 +18,39 @@ const TodoMain: React.FC<ITodoItemProps> = ({ data, tasks, setTasks }) => {
     };
 
     const [editedTask, setEditedTask] = useState<TaskItem>(defaultTask);
+    const [lockTask, setLockTask] = useState<TaskItem | null>(null);
+
     const [errors, setErrors] = useState<ErrorMsg | null>({
         title: "",
         description: "",
         dueDate: ""
     });
 
+    const handleLockUnlock = (ctx: { data: any }) => {
+        const { task } = ctx.data;
+        if (task) {
+            setLockTask(task);
+        }
+    };
+
     const handleUpdateTask = (taskId: string) => {
         const updatedTasks = tasks?.map((task) =>
             task.id === editedTask.id ? editedTask : task
-        );        
+        );
         const isValid = validateForm(editedTask, setErrors, editedTask.dueDate ?? tasks.find((item) => item.id === taskId)?.dueDate);
         if (isValid) {
             setTasks(updatedTasks);
             setEditMode(false);
             setEditedTask(defaultTask);
         }
+        centrifuge.publish('tasks', { type: 'unlock', task: { id: editedTask.id, lock: { userId: null } } });
     };
 
     const handleCancelEdit = () => {
         setEditMode(false);
         setEditedTask(defaultTask);
         setErrors(null);
+        centrifuge.publish('tasks', { type: 'unlock', task: { id: editedTask.id, lock: { userId: null } } });
     };
 
     const handleDeleteTask = (taskId: string) => {
@@ -47,9 +58,10 @@ const TodoMain: React.FC<ITodoItemProps> = ({ data, tasks, setTasks }) => {
         setTasks(updatedTasks);
     };
 
-    const handleEdit = (task: TaskItem) => {
+    const handleEdit = async (task: TaskItem) => {
         setEditMode(true);
         setEditedTask(task);
+        centrifuge.publish('tasks', { type: 'lock', task: { id: task.id, lock: { userId: task.id } } });
     };
 
     const toggleCompletion = (taskId: string) => {
@@ -69,17 +81,14 @@ const TodoMain: React.FC<ITodoItemProps> = ({ data, tasks, setTasks }) => {
         setTasks(items);
     }
 
-    useLayoutEffect(() => {
-        const interval = setInterval(() => {
-            // Update remaining time every second
-            const updatedTasks = tasks.map((task) => ({
-                ...task,
-                remainingTime: calculateTimeRemaining(task.dueDate ?? new Date())
-            }));
-            setTasks(updatedTasks);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [tasks]);
+    useEffect(() => {
+        sub.on('publication', handleLockUnlock);
+        sub.subscribe();
+        return () => {
+            sub.off('publication', handleLockUnlock);
+            sub.unsubscribe();
+        };
+    }, []);
 
     return (
         <section className="main">
@@ -129,14 +138,14 @@ const TodoMain: React.FC<ITodoItemProps> = ({ data, tasks, setTasks }) => {
                                                         <div className="field-item">
                                                             <DatePicker
                                                                 className="field active"
-                                                                selected={editedTask.dueDate} 
+                                                                selected={editedTask.dueDate}
                                                                 onChange={(date) => setEditedTask({
                                                                     ...editedTask,
                                                                     dueDate: date
-                                                                })} 
-                                                                placeholderText="Enter Duedate" 
+                                                                })}
+                                                                placeholderText="Enter Duedate"
                                                             />
-                                                            {errors?.dueDate && 
+                                                            {errors?.dueDate &&
                                                                 <span className="error-message">{errors.dueDate}</span>
                                                             }
                                                         </div>
@@ -157,25 +166,28 @@ const TodoMain: React.FC<ITodoItemProps> = ({ data, tasks, setTasks }) => {
                                                             type="checkbox"
                                                             checked={task.completed}
                                                             onChange={() => toggleCompletion(task.id)}
+                                                            disabled={lockTask?.lock?.userId === task.id}
                                                         />
                                                         <span>{task.title}</span>
                                                         <span>{task?.dueDate ? `Due date: ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}</span>
-                                                        {task.remainingTime && (
-                                                            <span className={`${task.remainingTime.days >= 3 ? 'green' : 'red'} time-duration`}>
-                                                                duration: {task.remainingTime.days} days, {task.remainingTime.hours} hours
-                                                            </span>
-                                                        )}
                                                     </div>
                                                     <div className="action">
-                                                        <button
-                                                            className="btn cancel"
-                                                            onClick={() => handleDeleteTask(task.id)}
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                        <button className="btn" onClick={() => handleEdit(task)}>
-                                                            Edit
-                                                        </button>
+                                                        {lockTask?.lock?.userId === task.id ? <span>Editing</span> : <>
+                                                            <button
+                                                                className="btn cancel"
+                                                                onClick={() => handleDeleteTask(task.id)}
+                                                                disabled={lockTask?.lock?.userId === task.id}
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                            <button
+                                                                className="btn" onClick={() => handleEdit(task)}
+                                                                disabled={lockTask?.lock?.userId === task.id}
+                                                            >
+                                                                Edit
+                                                            </button></>
+                                                        }
+
                                                     </div>
                                                 </>
                                             )}

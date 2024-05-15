@@ -14,7 +14,7 @@ export type TaskItem = {
     completed: boolean;
     dueDate?: Date | null;
     remainingTime?: RemainingTime;
-    lock?: { userId: string, lockedAt: number }
+    lock?: { userId: string; lockedAt?: number; } | null | undefined;
 }
 
 export type ITodoItemProps = {
